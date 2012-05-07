@@ -1,13 +1,14 @@
 var url = require("url"),
     fs = require("fs"),
-    formidable = require("formidable"),
-    sys = require("sys");
+    formidable = require("formidable");
 
 var mongo = require('mongodb');
 var Server = mongo.Server;
 var Db = mongo.Db;
 
 var db = new Db('test', new Server("127.0.0.1", 27017, {}));
+
+var image_root = "/server/flashflow_node/project/public/media/images/";
 
 function start(request, response) {
   console.log("Request handler 'start' was called.");
@@ -42,13 +43,13 @@ function upload(request, response) {
   
       /* Possible error on Windows systems:
          tried to rename to an already existing file */
-      fs.rename(files.upload.path, "/home/ubuntu/images/" + files.upload.name, function(err) {
+      fs.rename(files.upload.path, image_root + files.upload.name, function(err) {
         if (err) throw new Error("Error saving file");
           db.open(function(err,db) {
             if (err) throw new Error("Error opening db");
             db.collection('pictures', function(err, collection) {
               if (err) throw new Error("Error opening collection");
-              collection.insert({ image : files.upload.name, loc : [ 37, -124 ]},
+              collection.insert({ image : files.upload.name, loc : [ 37, -124 ], date : new Date()},
                                 { limit : 10 },
                                 function(err, cursor) {
                                   
@@ -59,7 +60,7 @@ function upload(request, response) {
                   response.writeHead(200, {"Content-Type": "text/html"});
                   response.write("created or updated index:" + indexName + "<br/>");
                   response.write("received image:<br/>");
-                  response.write("<img src='/show?image=" + files.upload.name + "' />");
+                  response.write("<img src='/media/images/" + files.upload.name + "' />");
                   response.end();
                   db.close();
                 })
@@ -79,7 +80,7 @@ function upload(request, response) {
 function show(request, response) {
   console.log("Request handler 'show' was called.");
   var url_obj = url.parse(request.url,true);
-  fs.readFile("/home/ubuntu/images/" + url_obj.query['image'], "binary", function(error, file) {
+  fs.readFile(image_root + url_obj.query['image'], "binary", function(error, file) {
     if(error) {
       response.writeHead(500, {"Content-Type": "text/plain"});
       response.write(error + "\n");
@@ -101,7 +102,7 @@ function pictures_stream(request,response) {
       if (err) throw new Error("Error opening db");
       db.collection('pictures', function(err, collection) {
         if (err) throw new Error("Error opening collection");
-        collection.find({ loc : { $near : [ 37, -124 ] , $maxDistance : 5 } }, { limit : 10 }, function(err, cursor) {
+        collection.find({ loc : { $near : [ 37, -124 ] , $maxDistance : 5 } }, { sort : [['date','desc']], limit : 10 }, function(err, cursor) {
           if (err) throw new Error("Error executing find");
           cursor.each(function(err, doc) {
             if (err) throw new Error("Error opening doc");
